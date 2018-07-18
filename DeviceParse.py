@@ -5,6 +5,15 @@ import xlwt
 from datetime import datetime
 import os
 import sys, getopt
+import argparse
+
+
+# parse the command line arguments
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('-i', required=True, action='store', dest='input_value', help='Input Directory to Scan')
+arg_parser.add_argument('-o', required=True, action='store', dest='output_value', help='Output xls file')
+arg_parser.add_argument('--version','-v', action='version', version='%(prog)s 1.0')
+results = arg_parser.parse_args()
 
 
 #setup the excel worksheet
@@ -27,21 +36,23 @@ col_width_desc = 256 * 50         # 50 characters wide
 
 
 # Here we grab all the files in the config directory
-rootDir = 'config'
+rootDir = results.input_value
+#rootDir = 'config'
 for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 	for fname in fileList:
-		DeviceFile = ('\t%s' % fname)
-		DeviceFile1 = ', '.join(re.findall(r'\S+$', DeviceFile))
+		DeviceFile = ('\t%s' % fname)             
+		DeviceFile1 = ', '.join(re.findall(r'\S+$', DeviceFile))          
 		print DeviceFile1
+        
 
-
-		# Set the sheet name, have to grab the hostname
-		parse= CiscoConfParse("config/%s" % DeviceFile1, factory=True)
-		host = parse.find_objects(r'hostname')[0]
+		# Set the sheet name, have to grab the hostname 
+		# parse= CiscoConfParse("config/%s" % DeviceFile1, factory=True)
+		parse = CiscoConfParse("%s/%s" % (rootDir, DeviceFile1), factory=True)
+                host = parse.find_objects(r'hostname')[0]
 		# Pull the hostname out of the list .... fun fun
 		sheet_name = ', '.join(re.findall(r'\S+$', host.text))
 		ws = wb.add_sheet(sheet_name,cell_overwrite_ok=True)
-                print sheet_name
+                print sheet_name		
 
 		# set the widths
 		ws.col(0).width = col_width_type
@@ -51,26 +62,27 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		ws.col(4).width = col_width_ip
 		ws.col(5).width = col_width_subnet
 		ws.col(6).width = col_width_desc
-
-		parse= CiscoConfParse("config/%s" % DeviceFile1, factory=True)
+		
+		# parse= CiscoConfParse("config/%s" % DeviceFile1, factory=True)
 		row=0
-
-		host= parse.find_objects(r'hostname')[0]
+		
+		#host = parse.find_objects(r'hostname')[0]
 		ws.write(row, 0, "Hostname", style2)
 		ws.write_merge(row,row,1,2, re.findall(r'\S+$', host.text), style2)
-		row= row+1
-
+		print host.text
+                row= row+1
+		
 		version = parse.find_objects(r'version')[0]
 		ws.write(row, 0, "Software Version", style2)
 		ws.write_merge(row,row,1,2, re.findall(r'\S+$', version.text), style2)
 		row= row+1
-
-
+		
+		
 		dns = parse.find_objects(r'ip domain-name')[0]
 		ws.write(row, 0, "Domain Name", style2)
 		ws.write_merge(row,row,1,2, re.findall(r'\S+$', dns.text), style2)
 		row= row+1
-
+		
 		ip_name_server = parse.find_objects(r'ip name-server')
 		num = 1
 		for ip_name_obj in ip_name_server:
@@ -78,7 +90,7 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		     ws.write_merge(row,row,1,2, re.findall(r'[0-9]+.[0-9]+.[0-9]+.[0-9]+', ip_name_obj.text), style2)
 		     row= row+1
 		     num = num+1
-
+		
 		logging_host = parse.find_objects(r'logging host')
 		num = 1
 		for logging_obj in logging_host:
@@ -86,7 +98,7 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		     ws.write_merge(row,row,1,2, re.findall(r'[0-9]+.[0-9]+.[0-9]+.[0-9]+', logging_obj.text), style2)
 		     row= row+1
 		     num = num+1
-
+		
 		snmp_server = parse.find_objects(r'snmp-server host')
 		num = 1
 		for snmp_obj in snmp_server:
@@ -94,7 +106,7 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		     ws.write_merge(row,row,1,2, re.findall(r'[0-9]+.[0-9]+.[0-9]+.[0-9]+', snmp_obj.text), style2)
 		     row= row+1
 		     num = num+1
-
+		
 		ntp_server = parse.find_objects(r'ntp server')
 		num = 1
 		for ntp_obj in ntp_server:
@@ -102,19 +114,19 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		     ws.write_merge(row,row,1,2, re.findall(r'[0-9]+.[0-9]+.[0-9]+.[0-9]+', ntp_obj.text), style2)
 		     row= row+1
 		     num = num+1
-
+                  
                 vlan_info = parse.find_objects(r'^vlan [0-9]+')
                 for vlan_info_obj in vlan_info:
         	     ws.write(row, 0, "VLAN IDs ", style2)
 		     ws.write_merge(row,row,1,2, re.findall(r'[0-9]+', vlan_info_obj.text), style2)
                      if vlan_info_obj.re_search_children(r"^.name [aA-zZ]+"):
                           ws.write(row, 3, "test", style2)
-                          #ws.write(row, 3, re.findall(r'^.name [aA-zZ]+', vlan_info_obj.text), style2)
+                     #ws.write(row, 3, re.findall(r'^.name [aA-zZ]+', vlan_info_obj.text), style2)
 		     row= row+1
 		     num = num+1
 
 
-
+		
 		# create the header row
 		row = row+1                                   #create a space
 		ws.write(row, 0, "Interface Type", style4)
@@ -124,8 +136,8 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		ws.write(row, 4, "IP Address", style4)
 		ws.write(row, 5, "Subnet Mask", style4)
 		ws.write(row, 6, "Description", style4)
-
-
+		
+		
 		interfaces= parse.find_objects('^interface')
 		for interface_obj in interfaces:
 		     row= row+1
@@ -137,16 +149,18 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		          ws.write(row, 6, interface_obj.description, style2)
 		          if interface_obj.access_vlan != 1:
 		               ws.write(row, 3, str(interface_obj.access_vlan), style2)
-		          if interface_obj.access_vlan == 1:
-			           trunk_vlan = re.findall(r'[0-9]+,*', str(interface_obj.trunk_vlans_allowed))
+		          if interface_obj.access_vlan == 1: 
+			       trunk_vlan = re.findall(r'[0-9]+,*', str(interface_obj.trunk_vlans_allowed))
 		               ws.write(row, 3, trunk_vlan, style2)
 			  if interface_obj.re_search_children(r"^\s+shutdown"):
 			       int_status = "shutdown"
                                ws.write(row, 2, int_status, style5)
-                          else:
+                          else: 
                                ws.write(row, 2, "", style2)
                           if interface_obj.re_search_children(r"^\s+ip address"):
 			       print interface_obj.re_search_children
+                               
 
+wb.save(results.output_value)
+#wb.save("example.xls")
 
-wb.save("example.xls")
