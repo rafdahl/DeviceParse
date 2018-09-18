@@ -67,12 +67,17 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 
 		# Parse the device configuration, need to use the proper type in ciscoconfparse for the OS on the switch
 		# Here defined are the 3 types used in this script IOS, NXOS(nexus) and ASA 
-		if results.type_value == 'asa':
-			parse = CiscoConfParse("%s/%s" % (rootDir, DeviceFile1), factory=True, syntax='asa')
-		if results.type_value == 'nxos':
+		if results.type_value == ('asa'):
+			parse = CiscoConfParse("%s/%s" % (rootDir, DeviceFile1), factory=True, syntax='ios')
+		elif results.type_value == ('nxos'):
 			parse = CiscoConfParse("%s/%s" % (rootDir, DeviceFile1), factory=True, syntax='nxos')
+		elif results.type_value == ('ios'):
+			parse = CiscoConfParse("%s/%s" % (rootDir, DeviceFile1), factory=True, syntax='ios')
 		else:
-            		parse = CiscoConfParse("%s/%s" % (rootDir, DeviceFile1), factory=True, syntax='ios')
+            		print "You must use the type (-t) ios nxos or asa ONLY!"
+			print "Exiting program"
+			print ""
+			exit()
 
 		# Set the sheet name, have to grab the hostname
 		host = parse.find_objects(r'hostname')[0]
@@ -100,18 +105,21 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		ws.write_merge(row,row,1,2, re.findall(r'\S+$', sheet_name.strip('\"')), style2)
                 row= row+1
 		
-		version = parse.find_objects(r'version')[0]
+		version = parse.find_objects(r'ersion')[0]
 		ws.write(row, 0, "Software Version", style2)
-		ws.write_merge(row,row,1,2, re.findall(r'\S+$', version.text), style2)
+		ws.write_merge(row,row,1,2, re.findall(r'\S+\d', version.text), style2)
 		row= row+1		
 		
                 try:
-		     dns = parse.find_objects(r'ip domain-name')[0]
+		     dns = parse.find_objects(r'domain-name')[0]
 		     ws.write(row, 0, "Domain Name", style2)
 		     ws.write_merge(row,row,1,2, re.findall(r'\S+$', dns.text), style2)
+		     #print dns.text
+		     #print re.findall(r'\S+$', dns.text)
 		     row= row+1
                 except:
                      errorspace = 1
+
 		
 		ip_name_server = parse.find_objects(r'ip name-server')
 		num = 1
@@ -144,6 +152,8 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		     ws.write_merge(row,row,1,2, re.findall(r'[0-9]+.[0-9]+.[0-9]+.[0-9]+', ntp_obj.text), style2)
 		     row= row+1
 		     num = num+1
+
+
                   
                 # create the header row for VLAN INFO
 		row = row+1
@@ -187,17 +197,105 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 		          ws.write(row, 6, interface_obj.description, style2)
 		          if interface_obj.access_vlan != 1:
 		               ws.write(row, 3, str(interface_obj.access_vlan), style2)
-		          if interface_obj.access_vlan == 1: 
+		          elif interface_obj.access_vlan == 1: 
 			       trunk_vlan = re.findall(r'[0-9]+,*', str(interface_obj.trunk_vlans_allowed))
 		               ws.write(row, 3, trunk_vlan, style2)
-			  if interface_obj.re_search_children(r"^\s+shutdown"):
+			  elif interface_obj.re_search_children(r"^\s+shutdown"):
 			       int_status = "shutdown"
                                ws.write(row, 2, int_status, style5)
                           else: 
                                ws.write(row, 2, "", style2)
                           
                                
-                               
+
+
+################################################### FIREWALL ADDITIONS #########################################################
+###################################################     UNDER TEST     #########################################################
+		if results.type_value == 'asa':
+			# create the header row for Object network
+			row = row+2
+			ws.write_merge(row,row,0,1, "Object Network", style4)
+			ws.write_merge(row,row,2,4, "Element", style4)
+			ws.write_merge(row,row,5,6, "Description", style4)
+	
+
+			object_network = parse.find_objects(r'^object network')
+		        for object_network_obj in object_network:
+		             row = row+1
+			     ws.write_merge(row,row,0,1, re.findall(r'\S+$', object_network_obj.text), style2)
+			     
+		             for object_info in object_network_obj.re_search_children(r'\w+'):
+		                  if object_info.text.find("description") == 1:
+				  	ws.write_merge(row,row,5,6, object_info.text, style2)
+				  else:
+					ws.write_merge(row,row,2,4, object_info.text, style2)
+					ws.write_merge(row,row,5,6, "", style2)
+				  
+			 
+
+
+			# create the header row for Object Group NETWORK
+			row = row+2
+			ws.write_merge(row,row,0,1, "Object Group Network", style4)
+			ws.write_merge(row,row,2,4, "Element", style4)
+			ws.write_merge(row,row,5,6, "Description", style4)
+	
+
+			object_group = parse.find_objects(r'^object-group network')
+		        for object_group_obj in object_group:
+		             row = row+1
+			     ws.write_merge(row,row,0,1, re.findall(r'\b(?!object|group|-|network)\w+.', object_group_obj.text), style2)
+			     #print re.findall(r'\b(?!object|group|-|network)\w+.', object_group_obj.text)
+		             for object_group_info in object_group_obj.re_search_children(r'\w+'):
+		                  if object_group_info.text.find("description") == 1:
+				  	ws.write_merge(row,row,5,6, object_group_info.text, style2)
+				  else:
+					ws.write_merge(row,row,2,4, object_group_info.text, style2)
+					row = row+1
+					ws.write_merge(row,row,5,6, "", style2)
+			     
+			# create the header row for Object Group SERVICE
+			row = row+2
+			ws.write_merge(row,row,0,1, "Object Group Service", style4)
+			ws.write_merge(row,row,2,4, "Element", style4)
+			ws.write_merge(row,row,5,6, "Description", style4)
+	
+
+			object_group = parse.find_objects(r'^object-group service')
+		        for object_group_obj in object_group:
+		             row = row+1
+			     ws.write_merge(row,row,0,1, re.findall(r'\b(?!object|group|-|service)\w+.', object_group_obj.text), style2)
+			     #print re.findall(r'\b(?!object|group|-|service)\w+.', object_group_obj.text)
+		             for object_group_info in object_group_obj.re_search_children(r'\w+'):
+		                  if object_group_info.text.find("description") == 1:
+				  	ws.write_merge(row,row,5,6, object_group_info.text, style2)
+				  else:
+					ws.write_merge(row,row,2,4, object_group_info.text, style2)
+					row = row+1
+					ws.write_merge(row,row,5,6, "", style2)
+		                    
+
+			# create the header row for Access-List and Rules
+			row = row+2
+			ws.write_merge(row,row,0,1, "Access list", style4)
+			ws.write_merge(row,row,2,4, "Element", style4)
+			ws.write_merge(row,row,5,6, "Description", style4)
+	
+
+			object_access_list = parse.find_objects(r'^access-list')
+		        for object_access_list_obj in object_access_list:
+			     # get access list
+			     access_list = re.findall(r'\b(?!access|list|-)\S+', object_access_list_obj.text)
+			     #print access_list[4]
+		  	
+			object_access_group = parse.find_objects(r'^access-group')
+		        for object_access_group_obj in object_access_group:
+			     # get access groups
+			     access_group = re.findall(r'\b(?!access|group|-)\S+', object_access_group_obj.text)
+			     print access_group
+			 
+################################################ END OF FIREWALL ADDITIONS ######################################################
+
 
 wb.save(results.output_value)
 
